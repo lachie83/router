@@ -111,6 +111,14 @@ func TestValidEnforceWhitelists(t *testing.T) {
 	testValidValues(t, newTestRouterConfig, "EnforceWhitelists", "enforceWhitelists", []string{"true", "false", "TRUE", "FALSE"})
 }
 
+func TestValidServerTokens(t *testing.T) {
+	testValidValues(t, newTestRouterConfig, "DisableServerTokens", "disableServerTokens", []string{"true", "false", "TRUE", "FALSE"})
+}
+
+func TestInvalidServerTokens(t *testing.T) {
+	testInvalidValues(t, newTestRouterConfig, "DisableServerTokens", "disableServerTokens", []string{"0", "-1", "foobar"})
+}
+
 func TestInvalidDefaultWhitelist(t *testing.T) {
 	testInvalidValues(t, newTestRouterConfig, "DefaultWhitelist", "defaultWhitelist", []string{"0", "-1", "foobar"})
 }
