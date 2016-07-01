@@ -132,31 +132,6 @@ http {
 	{{/* This means we force HTTPS if HSTS is enabled. */}}
 	{{ $enforceSecure := or $sslConfig.Enforce $hstsConfig.Enabled }}
 
-	# Default server handles requests for unmapped hostnames, including healthchecks
-	server {
-		listen 8080 default_server reuseport{{ if $routerConfig.UseProxyProtocol }} proxy_protocol{{ end }};
-		listen 6443 default_server ssl {{ if $routerConfig.HTTP2Enabled }}http2{{ end }} {{ if $routerConfig.UseProxyProtocol }}proxy_protocol{{ end }};
-		set $app_name "router-default-vhost";
-		{{ if $routerConfig.PlatformCertificate }}
-		ssl_protocols {{ $sslConfig.Protocols }};
-		ssl_certificate /opt/router/ssl/platform.crt;
-		ssl_certificate_key /opt/router/ssl/platform.key;
-		{{ else }}
-		ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-		ssl_certificate /opt/router/ssl/default/default.crt;
-		ssl_certificate_key /opt/router/ssl/default/default.key;
-		{{ end }}
-		server_name _;
-		location ~ ^/healthz/?$ {
-			access_log off;
-			default_type 'text/plain';
-			return 200;
-		}
-		location / {
-			return 404;
-		}
-	}
-
 	# Healthcheck on 9090 -- never uses proxy_protocol
 	server {
 		listen 9090 default_server;
@@ -238,15 +213,42 @@ http {
 
 			proxy_pass http://{{$appConfig.ServiceIP}}:80;{{ else }}return 503;{{ end }}
 		}
-		{{ if $appConfig.Maintenance }}error_page 503 @maintenance;
-			location @maintenance {
-					root /;
-			    rewrite ^(.*)$ /www/maintenance.html break;
-			}
-		{{ end }}
+		
 	}
 
 	{{end}}{{end}}
+
+	{{if $routerConfig.DefaultServiceEnabled}}
+	server {
+		listen 8080 default_server{{ if $routerConfig.UseProxyProtocol }} proxy_protocol{{ end }};
+		server_name _;
+		server_name_in_redirect off;
+		port_in_redirect off;
+		set $app_name "{{ $routerConfig.DefaultAppName }}";
+
+		vhost_traffic_status_filter_by_set_key {{ $routerConfig.DefaultAppName }} application::*;
+
+		location ~ ^/healthz/?$ {
+			access_log off;
+			default_type 'text/plain';
+			return 200;
+		}
+		
+		location / {
+			proxy_buffering off;
+			proxy_set_header Host $host;
+			proxy_set_header X-Forwarded-For $remote_addr;
+			proxy_set_header X-Forwarded-Proto $access_scheme;
+			proxy_set_header X-Forwarded-Port $forwarded_port;
+			proxy_redirect off;
+			proxy_http_version 1.1;
+			proxy_set_header Upgrade $http_upgrade;
+			proxy_set_header Connection $connection_upgrade;
+
+			proxy_pass http://{{$routerConfig.DefaultServiceIP}}:80;
+		}
+	}
+	{{end}}
 }
 
 {{ if $routerConfig.BuilderConfig }}{{ $builderConfig := $routerConfig.BuilderConfig }}stream {
